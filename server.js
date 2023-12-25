@@ -18,6 +18,7 @@ app.use(cors({
 }));
 app.use(cookieParser());
 app.use(express.json({ limit: "50mb" }));
+app.options('*', cors());
 app.use('/users/', usersRoutes);
 app.use('/admin/', adminRoutes);
 app.use('/franchise/', franchiseRoutes);
