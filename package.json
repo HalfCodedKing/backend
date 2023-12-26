@@ -1,6 +1,7 @@
 {
   "name": "backend",
   "version": "1.0.0",
+  "proxy": "http://localhost",
   "description": "",
   "main": "index.js",
   "scripts": {
