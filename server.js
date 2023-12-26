@@ -1,13 +1,15 @@
 const express = require("express");
 const { db } = require('./db');
 const cors = require("cors");
+const httpProxy = require("http-proxy");
 const usersRoutes = require('./Routes/user');
 const adminRoutes = require('./Routes/admin');
+const { createProxyMiddleware } = require('http-proxy-middleware');
 const franchiseRoutes = require('./Routes/franchise');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const bcrypt = require('bcrypt');
-
+// const apiProxy = httpProxy.createProxyServer();
 const jwtSecret = 'lecturevecture';
 
 const app = express();
@@ -30,7 +32,14 @@ app.use((req, res, next) => {
 app.use('/users/', usersRoutes);
 app.use('/admin/', adminRoutes);
 app.use('/franchise/', franchiseRoutes);
-
+const apiProxy = createProxyMiddleware('/api', {
+  target: 'https://air1ca.onrender.com', // Replace with your backend server URL
+  changeOrigin: true,
+  pathRewrite: {
+    '^/api': '', // Remove the '/api' prefix when forwarding the request
+  },
+});
+app.use('/api', apiProxy);
 app.post('/register', async (req, res) => {
   const { name, email, username, password } = req.body;
 
