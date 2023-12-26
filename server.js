@@ -12,9 +12,9 @@ const jwtSecret = 'lecturevecture';
 
 const app = express();
 app.use(cors({
-  origin: ["https://air1ca.netlify.app/"],
+  origin: ["*"],
   methods: ['GET', 'POST','PUT','DELETE'],
-  credentials: true
+  credentials: false
 }));
 app.use(cookieParser());
 app.use(express.json({ limit: "50mb" }));
