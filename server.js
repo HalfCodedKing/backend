@@ -1,6 +1,7 @@
 const express = require("express");
 const { db } = require('./db');
 const cors = require("cors");
+app.use(cors())
 const usersRoutes = require('./Routes/user');
 const adminRoutes = require('./Routes/admin');
 const franchiseRoutes = require('./Routes/franchise');
