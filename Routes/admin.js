@@ -71,9 +71,9 @@ router.post('/add-record', (req, res) => {
 });
 
 router.post('/add-comment', (req, res) => {
-  const { name, comments } = req.body;
-  const sql = `INSERT INTO comments (name, comments) VALUES (?,?)`
-  const params = [name, comments];
+  const { name,ranks, comments } = req.body;
+  const sql = `INSERT INTO comments (name,ranks, comments) VALUES (?,?,?)`
+  const params = [name,ranks, comments];
   db.query(sql, params, (err, result) => {
     if (err) {
       console.error("Database query error:", err);
@@ -82,6 +82,31 @@ router.post('/add-comment', (req, res) => {
     return res.status(200).json({ message: "Record added successfully" });
   });
 })
+router.post('/add-coupon', (req, res) => {
+  const { code,discount,discountType, validTo , upto , maxDiscount,couponLimit } = req.body;
+  const sql = `INSERT INTO coupon (code,discount,discountType,validTo,upto,maxDiscount,couponLimit) VALUES (?,?,?,?,?,?,?)`
+  const params = [code,discount,discountType, validTo,upto,maxDiscount,couponLimit];
+  db.query(sql, params, (err, result) => {
+    if (err) {
+      console.error("Database query error:", err);
+      return res.status(500).json({ message: "Error adding record" });
+    }
+    return res.status(200).json({ message: "Record added successfully" });
+  });
+})
+router.get('/coupons', (req, res) => {
+  const sql = 'SELECT * FROM coupon';
+
+  db.query(sql, (err, result) => {
+    if (err) {
+      console.error("Database query error:", err);
+      return res.status(500).json({ message: "Error fetching records" });
+    }
+  
+    return res.status(200).json(result);
+    
+  });
+});
 router.get('/comments', (req, res) => {
   const sql = 'SELECT * FROM comments';
 
@@ -94,12 +119,45 @@ router.get('/comments', (req, res) => {
     return res.status(200).json(result);
   });
 });
+router.put('/update-coupons/:id', (req, res) => {
+  const recordId = req.params.id;
+  const { code, discount, discountType, validTo, upto, maxDiscount, couponLimit } = req.body;
+
+  const sql = 'UPDATE coupon SET code=?, discount=?, discountType=?, validTo=?, upto=?, maxDiscount=?, couponLimit=? WHERE id=?';
+  
+  const params = [code, discount, discountType, validTo, upto, maxDiscount, couponLimit, recordId];
+
+  db.query(sql, params, (err, result) => {
+    if (err) {
+      console.error("Database query error:", err);
+      return res.status(500).json({ message: "Error updating record" });
+    }
+
+    return res.status(200).json({ message: "Record updated successfully" });
+  });
+});
+
+router.delete('/delete-coupon/:id', (req, res) => {
+  const recordId = req.params.id;
+
+  const sql = 'DELETE FROM coupon WHERE id=?';
+  const params = [recordId];
+
+  db.query(sql, params, (err, result) => {
+    if (err) {
+      console.error("Database query error:", err);
+      return res.status(500).json({ message: "Error deleting record" });
+    }
+
+    return res.status(200).json({ message: "Record deleted successfully" });
+  });
+});
 router.put('/update-comments/:id', (req, res) => {
   const recordId = req.params.id;
-  const { name, comments } = req.body;
+  const { name,ranks, comments } = req.body;
 
-  const sql = 'UPDATE comments SET name=?, comments=? WHERE id=?';
-  const params = [name, comments];
+  const sql = 'UPDATE comments SET name=?,ranks=?, comments=? WHERE id=?';
+  const params = [name,ranks, comments,recordId];
 
   db.query(sql, params, (err, result) => {
     if (err) {
@@ -141,18 +199,68 @@ router.get('/records', (req, res) => {
 // Update a record
 router.put('/update-record/:id', (req, res) => {
   const recordId = req.params.id;
-  const { image, Name, Rank, date } = req.body;
 
-  const sql = 'UPDATE ranks SET image=?, Name=?, Rank=?, date=? WHERE id=?';
-  const params = [image, Name, Rank, date, recordId];
-
-  db.query(sql, params, (err, result) => {
+  // Use the uploadMiddleware to handle the file upload
+  uploadMiddleware(req, res, async (err) => {
     if (err) {
-      console.error("Database query error:", err);
-      return res.status(500).json({ message: "Error updating record" });
+      console.error("Error uploading image:", err);
+      return res.status(500).json({ message: "Error uploading image" });
     }
 
-    return res.status(200).json({ message: "Record updated successfully" });
+    try {
+      let imagePath;
+      if (req.file) {
+        // If a new image is provided, upload it to Cloudinary
+        const { path } = req.file;
+        const cloudinaryUpload = await cloudinary.uploader.upload(path);
+        imagePath = cloudinaryUpload.secure_url;
+        fs.unlinkSync(path); // Delete the local file after uploading to Cloudinary
+      }
+
+      const { Name, Rank, date } = req.body;
+
+      // Check if an image was uploaded, and update the SQL query and parameters accordingly
+      const updateFields = [];
+      const params = [];
+      if (imagePath) {
+        updateFields.push('image=?');
+        params.push(imagePath);
+      }
+      if (Name) {
+        updateFields.push('Name=?');
+        params.push(Name);
+      }
+      if (Rank) {
+        updateFields.push('Rank=?');
+        params.push(Rank);
+      }
+      if (date) {
+        updateFields.push('date=?');
+        params.push(date);
+      }
+
+      if (updateFields.length === 0) {
+        // If no fields were provided for update, return an error
+        return res.status(400).json({ message: "No fields provided for update" });
+      }
+
+      // Construct the SQL query
+      const sql = `UPDATE ranks SET ${updateFields.join(', ')} WHERE id=?`;
+      params.push(recordId);
+
+      // Execute the SQL query
+      db.query(sql, params, (err, result) => {
+        if (err) {
+          console.error("Database query error:", err);
+          return res.status(500).json({ message: "Error updating record" });
+        }
+
+        return res.status(200).json({ message: "Record updated successfully" });
+      });
+    } catch (error) {
+      console.error("Error handling update:", error);
+      return res.status(500).json({ message: "Error handling update" });
+    }
   });
 });
 
@@ -337,7 +445,6 @@ router.delete('/delete-course/:id', (req, res) => {
  --------------------------------*/
 //add product
 router.post("/add-product", upload.array("productImage", 4), async (req, res) => {
-
   try {
     const {
       productUrl,
@@ -699,11 +806,12 @@ router.post("/add-franchise", (req, res) => {
     gst_number,
     franchise_type,
     mode_of_payment,
+    walletBalance,
   } = req.body;
 
   // Insert the franchise data into the "franchises" table
   const franchiseSql =
-    "INSERT INTO franchises (name, email, phone_number, password, gst_number, franchise_type, mode_of_payment) VALUES (?, ?, ?, ?, ?, ?, ?)";
+    "INSERT INTO franchises (name, email, phone_number, password, gst_number, franchise_type, mode_of_payment,walletBalance) VALUES (?, ?, ?, ?, ?, ?, ?,?)";
 
   const franchiseValues = [
     name,
@@ -713,6 +821,7 @@ router.post("/add-franchise", (req, res) => {
     gst_number,
     franchise_type,
     mode_of_payment,
+    walletBalance
   ];
 
   db.query(franchiseSql, franchiseValues, (err, franchiseResult) => {
@@ -872,6 +981,7 @@ router.put("/franchise/:id", (req, res) => {
     password,
     gst_number,
     franchise_type,
+    walletBalance,
     mode_of_payment,
   } = req.body;
 
@@ -891,7 +1001,7 @@ router.put("/franchise/:id", (req, res) => {
 
     // Update the franchise data in the database based on the provided id
     const franchiseSql =
-      "UPDATE franchises SET name = ?, email = ?, phone_number = ?, password = ?, gst_number = ?, franchise_type = ?, mode_of_payment = ? WHERE id = ?";
+      "UPDATE franchises SET name = ?, email = ?, phone_number = ?, password = ?, gst_number = ?, franchise_type = ?, mode_of_payment = ? ,walletBalance = ? WHERE id = ?";
 
     const franchiseValues = [
       name,
@@ -901,6 +1011,7 @@ router.put("/franchise/:id", (req, res) => {
       gst_number,
       franchise_type,
       mode_of_payment,
+      walletBalance,
       id,
     ];
 
