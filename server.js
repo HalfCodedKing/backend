@@ -14,7 +14,7 @@ const jwtSecret = 'lecturevecture';
 
 const app = express();
 app.use(cors({
-  origin: ["*"],
+  origin: ["http://103.217.120.226/"],
   methods: ['GET', 'POST','PUT','DELETE'],
   credentials: false
 }));
