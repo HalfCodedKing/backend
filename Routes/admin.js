@@ -8,7 +8,6 @@ const fs = require("fs"); // for image deleting and editing
 const path = require("path");
 const app = express();
 const staticPath = path.join(__dirname, "../../frontend/public");
-const xlsx = require('xlsx');
 
 console.log("static ", staticPath);
 app.use('/images', express.static(staticPath));
