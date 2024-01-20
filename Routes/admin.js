@@ -8,19 +8,8 @@ const fs = require("fs"); // for image deleting and editing
 const path = require("path");
 const app = express();
 const staticPath = path.join(__dirname, "../../frontend/public");
-const mysql = require('mysql2/promise');
 const xlsx = require('xlsx');
 
-// MySQL Connection Pool
-const pool = mysql.createPool({
-  host: 'localhost',
-  user: 'root',
-  password: '',
-  database: 'franchise',
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
-});
 console.log("static ", staticPath);
 app.use('/images', express.static(staticPath));
 
