@@ -8,7 +8,19 @@ const fs = require("fs"); // for image deleting and editing
 const path = require("path");
 const app = express();
 const staticPath = path.join(__dirname, "../../frontend/public");
+const mysql = require('mysql2/promise');
+const xlsx = require('xlsx');
 
+// MySQL Connection Pool
+const pool = mysql.createPool({
+  host: 'localhost',
+  user: 'root',
+  password: '',
+  database: 'franchise',
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0
+});
 console.log("static ", staticPath);
 app.use('/images', express.static(staticPath));
 
@@ -1001,51 +1013,70 @@ router.post("/add-franchise", (req, res) => {
     gst_number,
     franchise_type,
     mode_of_payment,
+    wBalance
   } = req.body;
 
-  // Insert the franchise data into the "franchises" table
-  const franchiseSql =
-    "INSERT INTO franchises (name, email, phone_number, password, gst_number, franchise_type, mode_of_payment) VALUES (?, ?, ?, ?, ?, ?, ?)";
+  // Check if the email already exists in the "franchises" table
+  const checkEmailSql = "SELECT COUNT(*) as count FROM franchises WHERE email = ?";
+  const checkEmailValues = [email];
 
-  const franchiseValues = [
-    name,
-    email,
-    phone_number,
-    password,
-    gst_number,
-    franchise_type,
-    mode_of_payment,
-  ];
-
-  db.query(franchiseSql, franchiseValues, (err, franchiseResult) => {
-    if (err) {
-      console.error("Database query error:", err);
-      return res.status(500).json({ message: "Error creating franchise" });
+  db.query(checkEmailSql, checkEmailValues, (checkEmailErr, checkEmailResult) => {
+    if (checkEmailErr) {
+      console.error("Database query error:", checkEmailErr);
+      return res.status(500).json({ message: "Error checking email existence" });
     }
-    franchiseId = franchiseResult.insertId;
 
-    // Insert the franchise's email and password into the "user" table
-    const userSql =
-      "INSERT INTO user (name,email, password, role) VALUES (?, ?, ?,?)";
+    const emailCount = checkEmailResult[0].count;
 
-    const userValues = [name, email, password, "franchise"];
+    if (emailCount > 0) {
+      // Email already exists, return an error
+      return res.status(400).json({ message: "Email already exists" });
+    }
 
-    db.query(userSql, userValues, (userErr, userResult) => {
-      if (userErr) {
-        console.error("Database query error:", userErr);
-        return res
-          .status(500)
-          .json({ message: "Error creating franchise user account" });
+    // If the email does not exist, proceed to insert the franchise
+    const franchiseSql =
+      "INSERT INTO franchises (name, email, phone_number, password, gst_number, franchise_type, mode_of_payment, wBalance) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+
+    const franchiseValues = [
+      name,
+      email,
+      phone_number,
+      password,
+      gst_number,
+      franchise_type,
+      mode_of_payment,
+      wBalance
+    ];
+
+    db.query(franchiseSql, franchiseValues, (err, franchiseResult) => {
+      if (err) {
+        console.error("Database query error:", err);
+        return res.status(500).json({ message: "Error creating franchise" });
       }
 
-      return res
-        .status(200)
-        .json({ message: "Franchise created successfully", franchiseId });
+      const franchiseId = franchiseResult.insertId;
+
+      // Insert the franchise's email and password into the "user" table
+      const userSql =
+        "INSERT INTO user (name, email, password, role) VALUES (?, ?, ?, ?)";
+
+      const userValues = [name, email, password, "franchise"];
+
+      db.query(userSql, userValues, (userErr, userResult) => {
+        if (userErr) {
+          console.error("Database query error:", userErr);
+          return res
+            .status(500)
+            .json({ message: "Error creating franchise user account" });
+        }
+
+        return res
+          .status(200)
+          .json({ message: "Franchise created successfully", franchiseId });
+      });
     });
   });
 });
-
-
 
 // Add checker 
 var checkerId;
@@ -1127,10 +1158,11 @@ router.put("/update-checker/:id", (req, res) => {
     series,
     status,
     subject,
+    wBalance
   } = req.body;
 
   const updateCheckerSql =
-    "UPDATE checker SET name=?, email=?, phone=?, password=?, series=?, status=?, subject=? WHERE id=?";
+    "UPDATE checker SET name=?, email=?, phone=?, password=?, series=?, status=?, subject=? ,wBalance=?, WHERE id=?";
 
   const updateCheckerValues = [
     name,
@@ -1141,6 +1173,7 @@ router.put("/update-checker/:id", (req, res) => {
     status,
     subject,
     checkerId,
+    wBalance,
   ];
 
   db.query(updateCheckerSql, updateCheckerValues, (err, result) => {
@@ -1643,7 +1676,7 @@ router.get("/product/:id", (req, res) => {
 });
 
 router.post("/update_selected_products", async (req, res) => {
-  const { id, selectedProductIds, updatedProducts } = req.body;
+  const { id, selectedProductIds, updatedProducts,priceChange } = req.body;
 
   if (!id || !Array.isArray(selectedProductIds) || !Array.isArray(updatedProducts)) {
     return res.status(400).json({ message: "Invalid request data" });
@@ -1654,8 +1687,8 @@ router.post("/update_selected_products", async (req, res) => {
     await db.query("DELETE FROM selected_product WHERE franchise_id = ?", [id]);
 
     // Insert the updated selected products
-    const insertQuery = 'INSERT INTO selected_product (franchise_id, product_id, price, discount_price) VALUES ' +
-      selectedProductIds.map((productId, index) => '(?, ?, ?, ?)').join(', ');
+    const insertQuery = 'INSERT INTO selected_product (franchise_id, product_id, price, discount_price,priceChange) VALUES ' +
+      selectedProductIds.map((productId, index) => '(?, ?, ?, ?,?)').join(', ');
 
     // Flatten the array of values for the query (franchiseId, productId, price, discountPrice)
     const flattenedValues = [];
